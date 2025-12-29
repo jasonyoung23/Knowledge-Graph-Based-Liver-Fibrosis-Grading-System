@@ -1,0 +1,4 @@
+body { margin:0; background:#f7f8fa }
+pre { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, 'Roboto Mono', 'Courier New', monospace; font-size:13px }
+button { padding:6px 10px; border:1px solid #ccc; background:white; cursor:pointer }
+button:active{transform:translateY(1px)}
