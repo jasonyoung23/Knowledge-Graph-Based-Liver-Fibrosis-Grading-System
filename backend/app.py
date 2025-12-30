@@ -37,6 +37,10 @@ class IngestIn(BaseModel):
     slice_hint: Optional[str] = None
 
 
+class BatchProcessIn(BaseModel):
+    files_to_process: Optional[List[str]] = None
+
+
 def get_graph() -> Graph:
     uri = os.getenv("NEO4J_URI", "bolt://localhost:7687")
     user = os.getenv("NEO4J_USER", "neo4j")
@@ -69,7 +73,8 @@ def list_cases():
     files = []
     if DATA_DIR.exists():
         for p in sorted(DATA_DIR.glob("*.txt")):
-            files.append({"name": p.name, "path": str(p.relative_to(Path.cwd()))})
+            # Use relative path from data directory instead of cwd
+            files.append({"name": p.name, "path": f"data/{p.name}"})
     return {"cases": files}
 
 
@@ -106,9 +111,10 @@ def delete_case(name: str):
         p = DATA_DIR / name
         if not p.exists():
             raise HTTPException(status_code=404, detail="case file not found")
-        
-        p.unlink()  # Delete file
-        return {"ok": True, "message": f"Deleted {name}"}
+
+        # Remove from UI only - don't delete the actual file
+        # p.unlink()  # Comment out file deletion
+        return {"ok": True, "message": f"Removed {name} from UI"}
     except HTTPException:
         raise
     except Exception as e:
@@ -179,22 +185,32 @@ def api_ingest(body: IngestIn):
 
 
 @app.post("/api/batch-process")
-def api_batch_process():
-    """Batch process all .txt files in data directory: parse -> grade -> ingest."""
+def api_batch_process(body: BatchProcessIn):
+    """Batch process specified .txt files or all files in data directory: parse -> grade -> ingest."""
     try:
         from next_version_ingest import parse_case_text, ingest_struct as ingest_struct_fn, extract_slice_id, ingest_decision_graph
         from kg_grade import grade_case
-        
+
         results = []
         g = get_graph()
-        
+
         if not DATA_DIR.exists():
             return {"ok": False, "error": "data directory not found"}
-        
-        files = sorted([p for p in DATA_DIR.glob("*.txt")])
+
+        if body.files_to_process:
+            # 只处理指定的文件
+            files = []
+            for filename in body.files_to_process:
+                file_path = DATA_DIR / filename
+                if file_path.exists() and file_path.suffix == '.txt':
+                    files.append(file_path)
+        else:
+            # 处理所有文件（向后兼容）
+            files = sorted([p for p in DATA_DIR.glob("*.txt")])
+
         if not files:
-            return {"ok": True, "results": [], "message": "No .txt files found in data directory"}
-        
+            return {"ok": True, "results": [], "message": "No .txt files found to process"}
+
         for file_path in files:
             result = {"file": file_path.name, "status": "pending"}
             try:
@@ -245,6 +261,28 @@ def api_batch_process():
         print(f"Batch error: {e}\n{tb}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@app.delete("/api/clear-database")
+def api_clear_database():
+    """Clear all data from Neo4j database"""
+    try:
+        g = get_graph()
+
+        # Delete all nodes and relationships
+        g.run("MATCH (n) DETACH DELETE n")
+
+        # Optional: Clear schema constraints and indexes
+        try:
+            g.run("DROP CONSTRAINT slice_id IF EXISTS")
+            g.run("DROP CONSTRAINT feature_name IF EXISTS")
+            g.run("DROP CONSTRAINT staining_key IF EXISTS")
+            g.run("DROP CONSTRAINT fibrosis_key IF EXISTS")
+        except:
+            pass  # Constraints might not exist, ignore errors
+
+        return {"ok": True, "message": "Database cleared successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to clear database: {str(e)}")
 
 @app.get("/api/report")
 def api_report():

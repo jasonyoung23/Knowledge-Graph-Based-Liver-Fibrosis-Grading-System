@@ -1,0 +1,141 @@
+version: '3.8'
+
+services:
+  # Neo4j Graph Database
+  neo4j:
+    image: neo4j:5.15
+    container_name: liver-fibrosis-neo4j
+    ports:
+      - "7474:7474"   # Neo4j Browser
+      - "7687:7687"   # Bolt protocol
+    environment:
+      - NEO4J_AUTH=neo4j/password
+      - NEO4J_PLUGINS=["graph-data-science"]
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    networks:
+      - liver-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "password", "MATCH () RETURN count(*) limit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Backend API
+  backend:
+    build:
+      context: .
+      target: backend
+    container_name: liver-fibrosis-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=neo4j
+      - NEO4J_PASSWORD=password
+      - LLM_ENDPOINT=http://ollama:11434/v1/chat/completions
+      - LLM_MODEL=qwen2.5:14b-instruct
+    volumes:
+      - ./data:/app/data:ro
+      - ./backend:/app/backend:ro
+      - .:/app:ro
+    depends_on:
+      neo4j:
+        condition: service_healthy
+      ollama:
+        condition: service_completed_successfully
+    networks:
+      - liver-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/api/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Frontend
+  frontend:
+    build:
+      context: .
+      target: frontend-dev
+    container_name: liver-fibrosis-frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app/frontend
+      - /app/frontend/node_modules
+    depends_on:
+      - backend
+    networks:
+      - liver-network
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=development
+
+  # Ollama for LLM support (optional)
+  ollama:
+    image: ollama/ollama:latest
+    container_name: liver-fibrosis-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+      - ./init-ollama.sh:/init-ollama.sh
+    networks:
+      - liver-network
+    restart: unless-stopped
+    command: ["serve"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Ollama initializer (runs once to pull models)
+  ollama-init:
+    image: curlimages/curl:latest
+    container_name: liver-fibrosis-ollama-init
+    profiles: ["init"]
+    depends_on:
+      ollama:
+        condition: service_healthy
+    networks:
+      - liver-network
+    command: ["/bin/sh", "-c", "sleep 5 && /init-ollama.sh"]
+    volumes:
+      - ./init-ollama.sh:/init-ollama.sh
+
+  # Batch processor (for data processing jobs)
+  batch-processor:
+    build:
+      context: .
+      target: backend
+    container_name: liver-fibrosis-processor
+    profiles: ["batch"]
+    environment:
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=neo4j
+      - NEO4J_PASSWORD=password
+      - LLM_ENDPOINT=http://ollama:11434/v1/chat/completions
+      - LLM_MODEL=qwen2.5:14b-instruct
+    volumes:
+      - ./data:/app/data:ro
+      - ./backend:/app/backend:ro
+      - .:/app:ro
+    depends_on:
+      neo4j:
+        condition: service_healthy
+    networks:
+      - liver-network
+    command: ["python", "next_version_ingest.py", "-i", "data/*.txt"]
+
+volumes:
+  neo4j_data:
+  neo4j_logs:
+  ollama_data:
+
+networks:
+  liver-network:
+    driver: bridge

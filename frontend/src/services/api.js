@@ -33,8 +33,9 @@ export async function getReport(){
   return fetchJSON('/api/report')
 }
 
-export async function batchProcess(){
-  return fetchJSON('/api/batch-process', {method:'POST'})
+export async function batchProcess(files = null){
+  const body = files && files.length > 0 ? { files_to_process: files } : {}
+  return fetchJSON('/api/batch-process', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)})
 }
 
 export async function uploadCase(file){
@@ -47,4 +48,8 @@ export async function uploadCase(file){
 
 export async function deleteCase(name){
   return fetchJSON(`/api/case/${encodeURIComponent(name)}`, {method:'DELETE'})
+}
+
+export async function clearDatabase(){
+  return fetchJSON('/api/clear-database', {method:'DELETE'})
 }

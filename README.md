@@ -36,7 +36,65 @@ A comprehensive web application for parsing, grading, and ingesting pathology ca
 - Neo4j 4.0+ (local or remote)
 - (Optional) Ollama with qwen2.5:14b-instruct model
 
-## 🚀 Installation
+## 🏃 Quick Start
+
+### Option 1: Using Docker (Recommended)
+
+1. **Prerequisites**: Install Docker and Docker Compose
+2. **Clone and run**:
+   ```bash
+   git clone <your-repo-url>
+   cd liver-fibrosis-grading-system
+   ./run.sh docker-build
+   ./run.sh docker-init    # Initialize Ollama models (optional)
+   ./run.sh docker-start
+   ```
+3. **Access the application**:
+   - Frontend: http://localhost:3000
+   - Backend API: http://localhost:8000
+   - API Docs: http://localhost:8000/docs
+   - Neo4j Browser: http://localhost:7474
+
+### Option 2: Using run.sh Script
+
+1. **Prerequisites**: Python 3.9+, Node.js 14+, Docker
+2. **Setup and run**:
+   ```bash
+   git clone <your-repo-url>
+   cd liver-fibrosis-grading-system
+   ./run.sh setup          # Setup environments
+   ./run.sh start          # Start all services
+   ```
+3. **Batch processing**:
+   ```bash
+   ./run.sh batch          # Process all case files
+   ./run.sh process data/case1.txt  # Process single file
+   ```
+
+### Available run.sh Commands
+
+```bash
+./run.sh setup           # Setup Python and Node.js environments
+./run.sh start           # Start all services (backend, frontend, neo4j)
+./run.sh stop            # Stop all services
+./run.sh backend         # Start only backend server
+./run.sh frontend        # Start only frontend server
+./run.sh neo4j           # Start Neo4j database
+./run.sh batch           # Batch process all case files
+./run.sh process <file>  # Process a single case file
+./run.sh docker-build    # Build Docker image
+./run.sh docker-start    # Start services with Docker Compose
+./run.sh docker-stop     # Stop Docker services
+./run.sh docker-init     # Initialize Ollama models
+./run.sh docker-batch    # Run batch processing with Docker
+./run.sh logs [service]  # Show logs (all services or specific service)
+./run.sh cleanup         # Clean up environments and containers
+./run.sh help            # Show help message
+```
+
+## 🚀 Manual Installation
+
+*(For advanced users or development)*
 
 ### 1. Clone Repository
 ```bash
@@ -63,18 +121,25 @@ npm install
 cd ..
 ```
 
-### 4. Setup Environment Variables
-Create a `.env` file in the project root:
+### 4. Setup Environment Variables (Optional)
+Create a `.env` file in the project root (only needed for manual setup):
 
 ```bash
 # Neo4j Configuration
 NEO4J_URI=bolt://localhost:7687
 NEO4J_USER=neo4j
-NEO4J_PASSWORD=your_password_here
+NEO4J_PASSWORD=password
 
 # LLM Configuration (Optional)
-LLM_ENDPOINT=http://202.120.40.86:11445/v1/chat/completions
+# For Docker setup (recommended)
+LLM_ENDPOINT=http://ollama:11434/v1/chat/completions
 LLM_MODEL=qwen2.5:14b-instruct
+
+# For local Ollama installation
+# LLM_ENDPOINT=http://localhost:11434/v1/chat/completions
+
+# For remote LLM service
+# LLM_ENDPOINT=http://202.120.40.86:11445/v1/chat/completions
 ```
 
 ## 🔧 Configuration
@@ -105,6 +170,12 @@ docker run -d \
 
 ### LLM Setup (Optional)
 
+**Using Docker** (recommended):
+```bash
+./run.sh docker-init    # Initialize Ollama with required models
+```
+
+**Manual setup**:
 If you have Ollama running locally:
 ```bash
 # Update LLM_ENDPOINT in .env
@@ -117,9 +188,30 @@ To disable LLM (use rule-based only):
 USE_LLM = False
 ```
 
+### Docker Configuration
+
+The project includes comprehensive Docker support:
+
+- **Multi-stage builds** for optimized images
+- **docker-compose.yml** with all services (backend, frontend, neo4j, ollama)
+- **Automated model initialization** for Ollama
+- **Health checks** for all services
+- **Volume persistence** for databases
+
+**Service Ports**:
+- Frontend: 3000
+- Backend API: 8000
+- Neo4j Browser: 7474
+- Neo4j Bolt: 7687
+- Ollama API: 11434
+
 ## ▶️ Running the Application
 
-### Start Backend
+*(See [Quick Start](#-quick-start) section above for recommended methods)*
+
+### Manual Startup (Alternative)
+
+#### Start Backend
 ```bash
 # From project root
 uvicorn backend.app:app --reload --port 8000
@@ -127,7 +219,7 @@ uvicorn backend.app:app --reload --port 8000
 
 Backend will be available at: `http://localhost:8000`
 
-### Start Frontend
+#### Start Frontend
 ```bash
 cd frontend
 npm run dev -- --port 3000
@@ -135,7 +227,7 @@ npm run dev -- --port 3000
 
 Frontend will be available at: `http://localhost:3000`
 
-### View API Documentation
+#### View API Documentation
 Once backend is running, visit: `http://localhost:8000/docs` (Swagger UI)
 
 ## 📖 Usage Guide
@@ -193,10 +285,10 @@ RETURN s, l, f
 ## 🗂️ File Structure
 
 ```
-src/
-├── backend/
-│   └── app.py              # FastAPI application
-├── frontend/
+├── backend/                    # FastAPI backend application
+│   ├── app.py                  # Main FastAPI application
+│   └── requirements.txt        # Python dependencies
+├── frontend/                   # React frontend application
 │   ├── src/
 │   │   ├── pages/
 │   │   │   ├── CaseList.jsx    # Case list + batch processing UI
@@ -205,15 +297,21 @@ src/
 │   │       └── api.js          # API client wrapper
 │   ├── package.json
 │   └── vite.config.js
-├── data/                   # Case files (uploaded)
+├── data/                       # Case files (uploaded/managed)
 │   ├── case1.txt
 │   ├── case2.txt
 │   └── ...
-├── next_version_ingest.py  # Core parsing & ingestion logic
-├── kg_grade.py             # Ishak grading rules & LLM explanation
-├── kg_report.py            # Report generation (optional)
-├── requirements.txt        # Python dependencies
-└── README.md              # This file
+├── run.sh                      # Main runner script
+├── Dockerfile                  # Docker image definition
+├── docker-compose.yml          # Multi-service Docker configuration
+├── init-ollama.sh              # Ollama model initialization script
+├── .dockerignore               # Docker ignore file
+├── next_version_ingest.py      # Core parsing & ingestion logic
+├── kg_grade.py                 # Ishak grading rules & LLM explanation
+├── kg_ingest_cn.py             # Batch ingestion script
+├── kg_report.py                # Report generation (optional)
+├── requirements.txt            # Legacy Python dependencies
+└── README.md                   # This file
 ```
 
 ## 🔌 API Endpoints
@@ -302,10 +400,13 @@ pip install -r requirements.txt
 5. **Analyze**: Query Neo4j to extract insights
 
 ```bash
-# CLI example (standalone)
-python3 next_version_ingest.py -i data/case1.txt
+# Using run.sh (recommended)
+./run.sh process data/case1.txt    # Process single file
+./run.sh batch                     # Process all files
+./run.sh docker-batch              # Process with Docker
 
-# Or batch mode
+# Or direct CLI (requires manual environment setup)
+python3 next_version_ingest.py -i data/case1.txt
 python3 next_version_ingest.py -i data/*.txt
 ```
 

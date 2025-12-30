@@ -1,17 +1,27 @@
 import React, {useState} from 'react'
 import CaseList from './pages/CaseList'
 import CaseView from './pages/CaseView'
+import './styles.css'
 
 export default function App(){
   const [selected, setSelected] = useState(null)
 
   return (
-    <div style={{display:'flex',height:'100vh',fontFamily:'sans-serif'}}>
-      <div style={{width:300,borderRight:'1px solid #ddd',padding:12,overflow:'auto'}}>
-        <h3>Cases</h3>
-        <CaseList onSelect={setSelected} selected={selected} />
+    <div className="app-container">
+      {/* 侧边栏 */}
+      <div className="sidebar">
+        <div className="sidebar-header">
+          <h2>
+            🏥 肝纤维化分级系统
+          </h2>
+        </div>
+        <div className="sidebar-content">
+          <CaseList onSelect={setSelected} selected={selected} />
+        </div>
       </div>
-      <div style={{flex:1,padding:16,overflow:'auto'}}>
+
+      {/* 主要内容区域 */}
+      <div className="main-content">
         <CaseView caseFile={selected} />
       </div>
     </div>

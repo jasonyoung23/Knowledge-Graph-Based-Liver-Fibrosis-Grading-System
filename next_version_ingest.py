@@ -24,7 +24,6 @@ import sys
 import glob
 import json
 import datetime
-from openai import OpenAI
 from kg_grade import grade_case
 
 import requests
@@ -49,34 +48,39 @@ class LLMNotAvailable(Exception):
 
 def call_llm(prompt: str) -> str:
     """
-    调用本地 Ollama 模型
+    调用 OpenAI 兼容 API (使用 requests 直接调用)
     """
     if not USE_LLM:
         raise LLMNotAvailable("USE_LLM=False")
 
-    url = "http://202.120.40.86:11445/v1/chat/completions"
-    model_name = "qwen2.5:14b-instruct"
+    url = "https://cn.getgoapi.com/v1/chat/completions"
+    api_key = "sk-hhBG3Jq4EJhSFwSYr4KDPereFzpbojM6qhwJtKuH5twEPLHh"
 
     headers = {
+        "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json"
     }
+
     payload = {
-        "model": model_name,
+        "model": "gpt-4o-mini",
         "messages": [{"role": "user", "content": prompt}],
         "temperature": 0.0
     }
 
-    resp = requests.post(url, headers=headers, json=payload, timeout=30)
-    if resp.status_code != 200:
-        raise RuntimeError(f"Ollama API error {resp.status_code}: {resp.text}")
-
-    data = resp.json()
     try:
-        content = data["choices"][0]["message"]["content"]
-    except Exception:
-        raise RuntimeError(f"Unexpected Ollama response: {data}")
+        resp = requests.post(url, headers=headers, json=payload, timeout=30)
+        if resp.status_code != 200:
+            raise RuntimeError(f"API error {resp.status_code}: {resp.text}")
 
-    return content.strip()
+        data = resp.json()
+        try:
+            content = data["choices"][0]["message"]["content"]
+            return content.strip()
+        except Exception:
+            raise RuntimeError(f"Unexpected API response: {data}")
+
+    except Exception as e:
+        raise RuntimeError(f"OpenAI API error: {str(e)}")
 
 
 
@@ -338,9 +342,7 @@ def normalize_case_with_llm(raw_case: str) -> str:
     """.strip()
 
 
-    print("\n[DEBUG] Calling LLM to normalize case...")
     normalized = call_llm(template_prompt)
-    print("[DEBUG] LLM normalized result:\n", normalized, "\n")
     return normalized
 
 

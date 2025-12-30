@@ -11,9 +11,13 @@ from typing import Dict, List, Tuple
 # ========== LLM 配置 ==========
 LLM_ENDPOINT = os.getenv(
     "LLM_ENDPOINT",
-    "http://202.120.40.86:11445/v1/chat/completions"
+    "https://cn.getgoapi.com/v1/chat/completions"
 )
-LLM_MODEL = os.getenv("LLM_MODEL", "qwen2.5:14b-instruct")
+LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
+LLM_API_KEY = os.getenv(
+    "LLM_API_KEY",
+    "sk-hhBG3Jq4EJhSFwSYr4KDPereFzpbojM6qhwJtKuH5twEPLHh"
+)
 
 
 # ============================================================
@@ -157,7 +161,11 @@ Ishak 分级：{stage}
     }
 
     try:
-        resp = requests.post(LLM_ENDPOINT, json=payload, timeout=30)
+        headers = {
+            "Authorization": f"Bearer {LLM_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        resp = requests.post(LLM_ENDPOINT, headers=headers, json=payload, timeout=30)
         resp.raise_for_status()
         return resp.json()["choices"][0]["message"]["content"].strip()
     except Exception as e:
